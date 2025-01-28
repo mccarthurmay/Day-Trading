@@ -398,31 +398,6 @@ class PriceMonitor:
                 print(f"Error in monitoring loop: {e}")
                 time.sleep(1)
 
-def main():
-    import os
-    API_KEY = os.getenv("ALPACA_KEY")
-    SECRET_KEY = os.getenv("ALPACA_SECRET")
-    
-    # Example usage
-    screener = StockScreener(API_KEY, SECRET_KEY)
-    
-    # Sample list of stocks (replace with your list)
-    symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META']
-    
-    print("Screening stocks...")
-    results = screener.screen_stocks(symbols)
-    
-    print("\nTop candidates (sorted by lowest volatility):")
-    for r in results:
-        print(f"\n{r['symbol']}:")
-        print(f"Volatility: {r['volatility']*100:.2f}%")
-        print(f"Spread: {r['spread']*100:.3f}%")
-        print(f"Price: ${r['avg_price']:.2f}")
-
-if __name__ == "__main__":
-    main()
-        
-
 
 
         ## When I run out of things to say - maybe we can go get some coffee and talk about our life ambitions and if it gets stale we do work - ill drive
