@@ -1,0 +1,17 @@
+Example of Potential Returns
+Let’s break down a hypothetical scenario on Uniswap V2:
+
+Pool: ETH/USDT
+Annualized Fee Yield: 0.3% fee per trade, with high trading volume.
+Suppose the total trading volume in the pool is $1 million per day, and the average size of each trade is $1,000.
+Daily Fees: $1,000,000 x 0.3% = $3,000 in fees per day.
+Your share: If you provided 1% of the liquidity in the pool, your daily fee earnings would be $30.
+Annualized Return: If you consistently provide liquidity and the volume remains steady, you could earn approximately $30 x 365 days = $10,950 in trading fees per year. However, this doesn’t account for impermanent loss or any gas fees.
+This is just a simplified example, but it shows that high volume pools can generate significant returns, especially if you’re providing liquidity to stable or popular assets. However, impermanent loss can reduce these earnings, and if the price of ETH or USDT moves significantly, your profit could be offset.
+
+
+
+Yield Farming Aggregators: Tools like Yearn Finance and Harvest Finance aggregate the best LP pools from across different protocols and optimize yields by automatically switching between pools based on market conditions.
+
+
+Doesn't look feasible. LP is too big of a risk, and predicted like 5-20% returns anyway; not that great. The scenario provided was too optimistic
