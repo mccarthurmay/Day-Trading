@@ -71,13 +71,13 @@ def main():
                 time.sleep(60)  # Wait 1 minute before next cycle
                 continue
             
-            # 2. Get top 3 symbols
-            top_symbols = opportunities.head(3)['symbol'].tolist()
+            # 2. Get top 5 symbols
+            top_symbols = opportunities.head(5)['symbol'].tolist()
             print(f"\nTop opportunities found: {', '.join(top_symbols)}")
             
             # 3. Process symbols in parallel
             all_results = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
                 # Create futures for each symbol
                 futures = {
                     executor.submit(
@@ -117,7 +117,7 @@ def main():
             
             # 5. Wait before next cycle
             print("\nWaiting 5 seconds before next cycle...")
-            time.sleep(5)
+            time.sleep(1)
             
         except Exception as e:
             print(f"Error in main loop: {e}")
