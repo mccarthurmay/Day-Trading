@@ -1,73 +1,136 @@
 import os
 import time
-from datetime import datetime, time as dt_time
-from scalping import StockAnalyzer, PriceMonitor
+import concurrent.futures
+from datetime import datetime
+import pandas as pd
+from scalping import ScalpingScreener
+from pinger import PricePinger
+from execution import OpportunityExecutor
+
+def process_symbol(symbol, api_key, api_secret, max_depth=0.50):
+    """Process a single symbol for opportunities"""
+    try:
+        pinger = PricePinger(api_key, api_secret)
+        executor = OpportunityExecutor(api_key, api_secret)
+        
+        print(f"\nProcessing {symbol}...")
+        
+        # Find price levels with liquidity
+        ping_results = pinger.ping_symbol(
+            symbol,
+            num_levels=10,
+            max_depth=max_depth
+        )
+        
+        if not ping_results.empty:
+            # Look for filled ping orders
+            filled_levels = ping_results[ping_results['filled']]
+            
+            results = []
+            for _, row in filled_levels.iterrows():
+                price_level = row['price_level']
+                print(f"Found liquidity for {symbol} at {price_level}")
+                
+                # Execute opportunity at this price level
+                result = executor.execute_opportunity(symbol, price_level)
+                if result:
+                    results.append(result)
+            
+            return results
+        
+        return []
+        
+    except Exception as e:
+        print(f"Error processing {symbol}: {e}")
+        return []
 
 def main():
-    # API credentials
+    # Get API credentials
     API_KEY = os.getenv("ALPACA_KEY")
-    SECRET_KEY = os.getenv("ALPACA_SECRET")
+    API_SECRET = os.getenv("ALPACA_SECRET")
     
-    if not API_KEY or not SECRET_KEY:
-        raise ValueError("API keys not set in environment variables")
-    
-    # Initialize analyzers
-    analyzer = StockAnalyzer(API_KEY, SECRET_KEY)
-    monitor = PriceMonitor(trading_client=analyzer.trading_client, 
-                          data_client=analyzer.data_client)
-    
-    # File paths
-    TICKER_FILE = "tickers.txt"
-    PICKLE_FILE = "stocks.pickle"
+    if not API_KEY or not API_SECRET:
+        print("Please set ALPACA_KEY and ALPACA_SECRET environment variables")
+        exit(1)
     
     while True:
-        current_time = datetime.now().time()
-        
-        # Only run during market hours (9:30 AM - 4:00 PM EST)
-        if dt_time(9, 30) <= current_time <= dt_time(16, 00):
-            try:
-                print("\n=== Starting new analysis cycle ===")
-                print(f"Time: {datetime.now()}")
-                
-                # Find best stock to monitor
-                best_stock = analyzer.get_best_candidate(PICKLE_FILE, TICKER_FILE)
-                
-                if best_stock:
-                    print(f"\nStarting price monitoring for {best_stock}")
-                    
-                    # Monitor for 5 minutes before re-analyzing
-                    monitor_start = time.time()
-                    monitor_duration = 300  # 5 minutes
-                    
-                    try:
-                        monitor.monitor_symbol(best_stock)
-                        while time.time() - monitor_start < monitor_duration:
-                            # Check if market is still open
-                            if datetime.now().time() > dt_time(16, 00):
-                                print("Market closed, stopping monitoring")
-                                break
-                            time.sleep(1)
-                    except Exception as e:
-                        print(f"Error monitoring {best_stock}: {e}")
-                else:
-                    print("No suitable candidates found")
-                    # Wait 1 minute before trying again
-                    time.sleep(60)
-                    
-            except Exception as e:
-                print(f"Error in main loop: {e}")
-                time.sleep(60)
-        else:
-            # Outside market hours
-            next_market_open = datetime.now().replace(
-                hour=9, minute=30, second=0, microsecond=0)
-            if current_time > dt_time(16, 00):
-                next_market_open = next_market_open.replace(
-                    day=next_market_open.day + 1)
+        try:
+            print("\n" + "="*50)
+            print(f"Starting new screening cycle at {datetime.now()}")
+            print("="*50)
             
-            sleep_seconds = (next_market_open - datetime.now()).total_seconds()
-            print(f"Market closed. Sleeping until {next_market_open}")
-            time.sleep(sleep_seconds)
+            # 1. Run screener to find top opportunities
+            screener = ScalpingScreener(API_KEY, API_SECRET)
+            opportunities = screener.screen_stocks(
+                min_volume=100,  # Minimum average volume
+                max_spread_pct=0.5  # Maximum spread percentage
+            )
+            
+            if opportunities.empty:
+                print("No opportunities found in screening")
+                time.sleep(60)  # Wait 1 minute before next cycle
+                continue
+            
+            # 2. Get top 3 symbols
+            top_symbols = opportunities.head(3)['symbol'].tolist()
+            print(f"\nTop opportunities found: {', '.join(top_symbols)}")
+            
+            # 3. Process symbols in parallel
+            all_results = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                # Create futures for each symbol
+                futures = {
+                    executor.submit(
+                        process_symbol, 
+                        symbol, 
+                        API_KEY, 
+                        API_SECRET,
+                        0.50  # max_depth
+                    ): symbol for symbol in top_symbols
+                }
+                
+                # Process completed futures
+                for future in concurrent.futures.as_completed(futures):
+                    symbol = futures[future]
+                    try:
+                        results = future.result()
+                        if results:
+                            all_results.extend(results)
+                    except Exception as e:
+                        print(f"Error in future for {symbol}: {e}")
+            
+            # 4. Summarize results
+            if all_results:
+                results_df = pd.DataFrame(all_results)
+                print("\nTrading Results Summary:")
+                summary = results_df.groupby('symbol').agg({
+                    'profit_loss': ['sum', 'mean'],
+                    'profit_loss_pct': ['mean']
+                }).round(2)
+                print(summary)
+                
+                # Save results to CSV
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                results_df.to_csv(f"trading_results_{timestamp}.csv", index=False)
+            else:
+                print("\nNo successful trades in this cycle")
+            
+            # 5. Wait before next cycle
+            print("\nWaiting 5 seconds before next cycle...")
+            time.sleep(5)
+            
+        except Exception as e:
+            print(f"Error in main loop: {e}")
+            time.sleep(60)  # Wait 1 minute before retrying
+            continue
 
 if __name__ == "__main__":
-    main()
+    # Make sure environment variables are set
+    import config
+    
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nProgram terminated by user")
+    except Exception as e:
+        print(f"Fatal error: {e}")
